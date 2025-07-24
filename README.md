@@ -44,7 +44,7 @@
         ```
 4.  **安装后端依赖**: 成功激活虚拟环境后，使用 `uv sync --dev` 同步项目依赖包：
     ```bash
-    uv sync --dev
+    uv pip install -r requirements.txt
     ```
     **开发过程中请使用 `uv pip install <package_name>` 下载新的项目依赖包！**
 
