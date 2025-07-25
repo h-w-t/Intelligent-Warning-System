@@ -42,8 +42,18 @@
         <div class="menu-icon">📈</div>
         <div class="menu-text">新增数据</div>
       </router-link>
+
+
+      <router-link 
+        class="menu-item nav-link" 
+        :to="{ name: 'Datahub' }" 
+        active-class="active"
+      >
+        <div class="menu-icon">🖥️</div>
+        <div class="menu-text">数据中台</div>
+      </router-link>
     </div>
-    
+
     <!-- 主内容区域 -->
     <div class="main-content">
       <div class="content-header">
@@ -140,7 +150,7 @@
           <div class="summary-body">
             <div v-if="latestAirData">
               <p>最近月份: {{ latestAirData.month }}</p>
-              <p>AQI指数: <span :class="getAqiClass(latestAirData.aqi)">{{ latestAirData.aqi.toFixed(2) }}</span></p>
+              <p>AQI指数: <span :class="getAqiClass(latestAirData.aqi)">{{ (latestAirData.aqi ?? 0).toFixed(2) }}</span></p>
               <p>PM2.5: {{ latestAirData.pm25 }} μg/m³</p>
               <p>PM10: {{ latestAirData.pm10 }} μg/m³</p>
             </div>
@@ -515,7 +525,8 @@ async fetchPollutionForecast({ daysAhead = 7, location = 'shanghai' } = {}) {
         tooltip: {
           trigger: 'item',
           formatter: function (params) {
-            return `${params.name}: ${params.value} (${params.percent.toFixed(2)}%)`;
+            return `${params.name}: ${params.value} (${(params.percent ?? 0).toFixed(2)}%)`;
+
           }
         },
         series: [
