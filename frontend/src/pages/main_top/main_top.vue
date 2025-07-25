@@ -178,6 +178,14 @@
           </div>
         </div>
       </div>
+
+        <!-- 上海肺癌地图 -->
+<div class="map-wrapper">
+  <h2>上海各区肺癌分布与类型占比</h2>
+  <div ref="shanghaiMap" class="shanghai-map"></div>
+</div>
+
+
     </div>
   </div>
 </template>
@@ -188,6 +196,11 @@ import * as echarts from 'echarts';
 export default {
   data() {
     return {
+      shanghaiMap: null,
+      shanghaiGeoJson: null,
+      districtTotal: [],      
+      districtDetail: {},     //行政区划病例数据
+
       currentDate: '',
       airQualityChart: null,
       diseaseRateChart: null,
@@ -245,6 +258,7 @@ export default {
     this.fetchAirPollutionData();
     this.fetchLungCancerData();
     window.addEventListener('resize', this.resizeCharts);
+    this.fetchShanghaiMap();//此处新增上海地图显示加载
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.resizeCharts);
@@ -256,6 +270,73 @@ export default {
     }
   },
   methods: {
+// 上海地图,显示总病例数和病例类型占比
+async fetchShanghaiMap() {
+  try {
+    // 加载 GeoJSON
+    const geoResponse = await fetch('/geo/shanghai.json');
+    if (!geoResponse.ok) throw new Error('GeoJSON 加载失败');
+    const geo = await geoResponse.json();
+
+    // 加载病例总数
+    const totalResponse = await fetch('http://localhost:3000/api/map/lung-cancer-by-district');
+    if (!totalResponse.ok) throw new Error('病例总数加载失败');
+    const total = await totalResponse.json();
+
+    // 加载明细
+    const detailResponse = await fetch('http://localhost:3000/api/map/district-details');
+    if (!detailResponse.ok) throw new Error('明细加载失败');
+    const detail = await detailResponse.json();
+
+    this.$nextTick(() => {
+      const mapChart = echarts.init(this.$refs.shanghaiMap);
+      echarts.registerMap('shanghai', geo);
+
+      const seriesData = total.map(({ district, count }) => ({
+        name: district,
+        value: count
+      }));
+
+      const option = {
+        tooltip: {
+          trigger: 'item',
+          formatter: p => {
+            const d = p.name;
+            const totalCases = p.value;
+            const breakdown = detail[d]?.breakdown || {};
+            const top5 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 5)
+              .map(([k, v]) => `${k} ${v}%`)
+              .join('<br/>');
+            return `${d} ${totalCases} 例<br/>${top5}`;
+          }
+        },
+        visualMap: {
+          min: 0,
+          max: Math.max(...seriesData.map(d => d.value), 1),
+          text: ['高', '低'],
+          inRange: { color: ['#ebedf0', '#08519c'] },
+          calculable: true,
+          right: 20,   // ← 新增
+          bottom: 20  
+        },
+        series: [
+          {
+            type: 'map',
+            map: 'shanghai',
+            roam: true,
+            data: seriesData
+          }
+        ]
+      };
+
+      mapChart.setOption(option);
+    });
+  } catch (err) {
+    console.error('地图加载失败：', err);
+  }
+},
 ////////////////////////////////////////////////////////////////////此处应有个人风险预测模块
     async fetchRiskPrediction({ age, gender, smoker, province, division }) {
   try {
@@ -1140,6 +1221,31 @@ async fetchPollutionForecast({ daysAhead = 7, location = 'shanghai' } = {}) {
     height: 250px;
   }
 }
+
+.map-wrapper {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;          /* 占满剩余高度 */
+  min-height: 0;        /* 允许收缩 */
+  overflow: hidden;
+}
+
+
+.map-wrapper h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: #2c3e50;
+  text-align: center;
+}
+
+.shanghai-map {
+  width: 100%;
+  height: 700px;   /* 原来 500 → 700，可按需要继续加 */
+  min-height: 0;
+  overflow: hidden   /* 防止 flex 子项溢出 */
+}
+
 
 @keyframes fadeIn {
   from { opacity: 0; bottom: 60px; }

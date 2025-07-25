@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from routes.QA import qa_bp  # 确保导入正确的蓝图
 from routes.cases import cases_bp
 from routes.environment import environment_bp
+from routes.map import map_bp
 # from routes.riskPrediction import risk_bp # 暂时注释掉未使用的蓝图
 # from routes.forecast import forecast_bp # 暂时注释掉未使用的蓝图
 import os
@@ -28,6 +29,8 @@ app.register_blueprint(environment_bp, url_prefix='/api/environment', strict_sla
 app.register_blueprint(cases_bp, url_prefix='/api/cases', strict_slashes=False)
 # 注册QA相关路由
 app.register_blueprint(qa_bp, url_prefix='/api/QA', strict_slashes=False)
+# 注册地图相关路由
+app.register_blueprint(map_bp, url_prefix='/api/map',strict_slashes=False)
 # app.register_blueprint(risk_bp, url_prefix='/api/riskPrediction', strict_slashes=False) # 暂时注释掉未使用的蓝图
 # app.register_blueprint(forecast_bp, url_prefix='/api/forecast', strict_slashes=False) # 暂时注释掉未使用的蓝图
 
