@@ -132,6 +132,11 @@ def create_case():
         """
         with get_cursor() as cur:
             cur.execute(sql, values)
+        
+        # 导入 risk_calculator 模块
+        from backend.database.risk_calculator import calculate_and_store_risk_score
+        # 在创建病例后，计算并存储其风险评分
+        calculate_and_store_risk_score(data['patient_SN'])
 
         return jsonify({'message': '病例已创建', 'caseId': data['sequence_number']}), 201
     except Exception as e:
@@ -237,6 +242,11 @@ def get_case(case_id):
         if not row:
             return jsonify({'error': '未找到该病例'}), 404
 
+        # 导入 risk_calculator 模块
+        from backend.database.risk_calculator import calculate_and_store_risk_score
+        # 在获取病例信息后，更新其风险评分
+        calculate_and_store_risk_score(row['patient_SN'])
+
         row['diagnosis_month'] = str(row['diagnosis_month']).zfill(2) if row['diagnosis_month'] else ''
         return jsonify(row)
     except Exception as e:
@@ -250,5 +260,34 @@ def get_case_imaging(case_id):
         # 如果你用的是 MongoDB，这里替换为 pymongo 逻辑
         # 下面仅做示意
         return jsonify({'message': '暂未实现'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ---------- 8. GET /api/cases/<patient_sn>/risk_rating ----------
+# 获取指定患者的风险评级信息
+# 用于前端根据患者序列号获取风险评分和评级
+@cases_bp.route('/<patient_sn>/risk_rating', methods=['GET'])
+def get_patient_risk_rating(patient_sn):
+    """
+    获取指定患者的风险评级信息
+    
+    Args:
+        patient_sn (str): 患者序列号
+        
+    Returns:
+        JSON: 包含患者序列号、风险分数和风险评级的对象
+        示例: {"patient_SN": "P001", "risk_score": 75.5, "risk_rating": "high"}
+    """
+    try:
+        with get_cursor() as cur:
+            # 查询风险评分表获取指定患者的风险信息
+            sql = "SELECT patient_SN, risk_score, risk_rating FROM risk_scores WHERE patient_SN = %s"
+            cur.execute(sql, (patient_sn,))
+            row = cur.fetchone()
+
+        if not row:
+            return jsonify({'error': '未找到该患者的风险评级'}), 404
+
+        return jsonify(row)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
