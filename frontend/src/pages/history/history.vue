@@ -135,7 +135,11 @@
           v-for="(caseItem, index) in paginatedCases"
           :key="caseItem.caseId"
           class="history-item"
-          :class="{ 'risk-high': riskMap[caseItem.caseId]?.risk >= 50 }"
+          :class="{ 
+            'risk-low': riskMap[caseItem.patient_SN]?.risk_rating === 'low',
+            'risk-medium': riskMap[caseItem.patient_SN]?.risk_rating === 'medium',
+            'risk-high': riskMap[caseItem.patient_SN]?.risk_rating === 'high'
+          }"
         >
           <div class="history-item-header" @click="toggleCase(index)">
             <div class="history-item-title">
@@ -209,7 +213,7 @@
 <script>
 import History_carryout from '../history_carryout/history_carryout.vue';
 import { formatDateForDisplay } from '../../utils/dateUtils'; // 导入日期格式化工具
-import { fetchCases, deleteCaseById, fetchForecastByIds } from '../../utils/api'; // 导入 API 工具函数
+import { fetchCases, deleteCaseById, fetchForecastByIds, getPatientRiskRating, updatePatientRiskScore } from '../../utils/api'; // 导入 API 工具函数
 
 export default {
 data() {
@@ -229,7 +233,7 @@ data() {
     error: null,
     currentPage: 1,
     itemsPerPage: 10,
-    riskMap: {},
+    riskMap: {}, // 存储风险评级，键为 patient_SN
     totalCount: 0 // 新增 totalCount
   };
 },
@@ -293,7 +297,16 @@ computed: {
   },
   
   methods: {
-    viewDetails(caseItem) {
+    async viewDetails(caseItem) {
+      // 当用户点击查看详情时，触发后端更新该病例的风险评分
+      // 后端 get_case 接口会根据 caseId (sequence_number) 查找病例并更新其风险评分
+      try {
+        await updatePatientRiskScore(caseItem.caseId);
+        console.log(`病例 ${caseItem.caseId} 的风险评分已更新。`);
+      } catch (error) {
+        console.error(`更新病例 ${caseItem.caseId} 风险评分失败:`, error);
+      }
+
       this.$router.push({
         name: 'history_carryout', 
         params: { caseId: caseItem.caseId }
@@ -321,9 +334,11 @@ computed: {
      * @returns {Promise<void>} 无直接返回值，通过响应式属性更新组件状态
      */
     async fetchFilteredCases() {
+      // 设置加载状态
       this.isLoading = true;
       this.error = null;
       try {
+        // 构建API请求参数
         const params = {
           page: this.currentPage,
           limit: this.itemsPerPage,
@@ -336,6 +351,7 @@ computed: {
           cancerType: this.cancerTypeFilter,
           isSmoker: this.smokerFilter
         };
+        // 调用后端API获取病例数据
         const response = await fetchCases(params);
         
         // 处理病例响应数据
@@ -348,9 +364,8 @@ computed: {
         
         // 只有当有病例时才去获取风险数据
         if (this.cases.length > 0) {
-          // 并行获取病例风险数据
-          // 通过caseId数组批量查询风险信息
-          await this.fetchRiskData(this.cases.map(c => c.caseId));
+          // 批量获取病例风险数据
+          await this.fetchRiskData(this.cases.map(c => c.patient_SN));
         } else {
           this.riskMap = {}; // 如果没有病例，清空风险数据
         }
@@ -365,13 +380,30 @@ computed: {
         this.isLoading = false;
       }
     },
-    async fetchRiskData(caseIds) {
+    /**
+     * 异步获取患者风险数据并构建风险映射表
+     * @param {string[]} patientSNs - 患者序列号数组
+     * @returns {Promise<void>} 无返回值，直接更新组件的riskMap状态
+     */
+    async fetchRiskData(patientSNs) {
       try {
-        const response = await fetchForecastByIds(caseIds);
-        this.riskMap = response.reduce((acc, item) => {
-          acc[item.caseId] = item;
+        // 为每个患者序列号创建风险数据获取Promise
+        const riskDataPromises = patientSNs.map(sn => getPatientRiskRating(sn).catch(error => {
+          console.error(`Error fetching risk data for ${sn}:`, error);
+          return null; // 返回 null 以便后续过滤掉失败的请求
+        }));
+        // 并行执行所有风险数据获取请求
+        const results = await Promise.all(riskDataPromises);
+        
+        // 将获取到的风险数据构建成映射表，键为患者序列号
+        const newRiskMap = results.reduce((acc, item) => {
+          if (item && item.patient_SN) { // 确保 item 不为 null 且包含 patient_SN
+            acc[item.patient_SN] = item;
+          }
           return acc;
         }, {});
+        this.riskMap = newRiskMap;
+        console.log('riskMap:', JSON.parse(JSON.stringify(this.riskMap))); // 添加调试信息，确保完整显示内容
       } catch (err) {
         console.error('Error fetching risk data:', err);
         // 可以选择不设置错误信息，因为病例数据已经加载
@@ -697,8 +729,18 @@ computed: {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+.risk-low {
+  background-color: #e6ffe6 !important; /* 淡绿色 */
+  border-left: 4px solid #4CAF50; /* 绿色 */
+}
+
+.risk-medium {
+  background-color: #fffbe6 !important; /* 淡黄色 */
+  border-left: 4px solid #FFC107; /* 黄色 */
+}
+
 .risk-high {
-  background-color: #ffe5ec !important;
-  border-left: 4px solid #ff4d6d;
+  background-color: #ffe5ec !important; /* 淡红色 */
+  border-left: 4px solid #ff4d6d; /* 红色 */
 }
 </style>
